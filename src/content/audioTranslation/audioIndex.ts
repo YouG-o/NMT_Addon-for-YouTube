@@ -21,20 +21,37 @@
  * When decoded: Contains "original" for original audio and "lang=en-US" for language
  */
 
+let isScriptInjected = false;
+
 async function handleAudioTranslation(isEnabled: boolean) {
     if (!isEnabled) return;
+    
+    if (isScriptInjected) {
+        audioLog('Audio script already injected, skipping');
+        return;
+    }
     
     audioLog('Initializing audio translation prevention');
     
     const script = document.createElement('script');
     script.src = browser.runtime.getURL('dist/content/audioTranslation/audioScript.js');
     document.documentElement.appendChild(script);
+    
+    isScriptInjected = true;
 }
 
 let audioObserver: MutationObserver | null = null;
 
 function setupAudioObserver() {
+    // Disconnect existing observer if any
+    if (audioObserver) {
+        console.log('[NMT][Audio] Disconnecting existing observer');
+        audioObserver.disconnect();
+        audioObserver = null;
+    }
+
     waitForElement('ytd-watch-flexy').then((watchFlexy) => {
+        console.log('[NMT][Audio] Setting up new observer');
         audioObserver = new MutationObserver((mutations) => {
             for (const mutation of mutations) {
                 if (mutation.type === 'attributes' && mutation.attributeName === 'video-id') {
@@ -54,3 +71,12 @@ function setupAudioObserver() {
         });
     });
 }
+
+// Clean up when the content script is unloaded
+window.addEventListener('unload', () => {
+    if (audioObserver) {
+        console.log('[NMT][Audio] Cleaning up observer');
+        audioObserver.disconnect();
+        audioObserver = null;
+    }
+});
